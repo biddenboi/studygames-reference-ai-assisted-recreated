@@ -1,0 +1,120 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Poppins", sans-serif;
+  font-size: 14px;
+  color: #222;
+  background: #f4f4f2;
+}
+
+a {
+  color: #e8571f;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input {
+  font: inherit;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 5px 10px;
+  background: white;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover {
+  background: #eee;
+}
+
+h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+
+h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 24px 0 10px;
+}
+
+.small {
+  font-size: 12px;
+  color: #777;
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* top bar */
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 0 28px;
+  height: 56px;
+  background: #1e2a38;
+}
+
+header a {
+  color: #c7d0db;
+}
+
+header a:hover {
+  color: white;
+  text-decoration: none;
+}
+
+header .name {
+  font-size: 19px;
+  font-weight: 600;
+  color: white;
+}
+
+header nav {
+  display: flex;
+  gap: 20px;
+  height: 100%;
+}
+
+header nav a {
+  display: flex;
+  align-items: center;
+  border-bottom: 3px solid transparent;
+  padding-top: 3px;
+}
+
+header nav a.on {
+  color: white;
+  border-bottom-color: #ff6b35;
+}
+
+header .right {
+  margin-left: auto;
+  font-size: 13px;
+}
+
+header .right.on {
+  color: white;
+}
+
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px;
+}
