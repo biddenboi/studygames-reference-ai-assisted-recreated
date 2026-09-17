@@ -118,3 +118,19 @@ main {
   margin: 0 auto;
   padding: 28px;
 }
+
+/* an open app takes the whole space under the top bar */
+
+.player {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px);
+}
+
+.player iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+  display: block;
+  background: white;
+}

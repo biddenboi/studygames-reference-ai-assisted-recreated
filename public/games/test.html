@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Test</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 20px; }
+</style>
+</head>
+<body>
+  <h2>Test app</h2>
+  <p>If you can see this it's running inside the iframe.</p>
+  <button id="btn">Clicked 0 times</button>
+<script>
+let clicks = 0
+document.getElementById("btn").onclick = () => {
+  clicks++
+  document.getElementById("btn").textContent = "Clicked " + clicks + " times"
+}
+</script>
+</body>
+</html>

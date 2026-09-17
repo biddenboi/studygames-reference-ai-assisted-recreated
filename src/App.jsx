@@ -1,3 +1,7 @@
+import GameFrame from "./GameFrame.jsx"
+
+const TEST = { id: "test", title: "Test", url: "games/test.html" }
+
 export default function App() {
   return (
     <>
@@ -6,10 +10,9 @@ export default function App() {
           StudyGames
         </a>
       </header>
-      <main>
-        <h1>StudyGames</h1>
-        <p>Nothing here yet.</p>
-      </main>
+      <div className="player">
+        <GameFrame game={TEST} />
+      </div>
     </>
   )
 }
