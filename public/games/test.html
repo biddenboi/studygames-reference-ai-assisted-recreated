@@ -9,14 +9,31 @@
 </head>
 <body>
   <h2>Test app</h2>
-  <p>If you can see this it's running inside the iframe.</p>
+  <p>Reload the page, the count should stay.</p>
   <button id="btn">Clicked 0 times</button>
 <script>
 let clicks = 0
-document.getElementById("btn").onclick = () => {
-  clicks++
-  document.getElementById("btn").textContent = "Clicked " + clicks + " times"
+const btn = document.getElementById("btn")
+
+function show() {
+  btn.textContent = "Clicked " + clicks + " times"
 }
+
+btn.onclick = () => {
+  clicks++
+  show()
+  parent.postMessage({ type: "save", save: { clicks } }, "*")
+}
+
+window.addEventListener("message", (e) => {
+  const msg = e.data || {}
+  if (msg.type === "load" && msg.save) {
+    clicks = msg.save.clicks
+    show()
+  }
+})
+
+parent.postMessage({ type: "hello" }, "*")
 </script>
 </body>
 </html>
