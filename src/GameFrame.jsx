@@ -8,9 +8,10 @@ const LOCKDOWN =
 
 const MAX_SAVE = 100_000
 
-export default function GameFrame({ game }) {
+export default function GameFrame({ game, tasks }) {
   const frame = useRef(null)
   const [html, setHtml] = useState("")
+  const [ready, setReady] = useState(false)
 
   function send(msg) {
     frame.current.contentWindow.postMessage(msg, "*")
@@ -32,6 +33,7 @@ export default function GameFrame({ game }) {
       if (msg.type === "hello") {
         const save = localStorage.getItem("save:" + game.id)
         send({ type: "load", save: save ? JSON.parse(save) : null })
+        setReady(true)
       }
 
       if (msg.type === "save") {
@@ -44,6 +46,14 @@ export default function GameFrame({ game }) {
     window.addEventListener("message", onMessage)
     return () => window.removeEventListener("message", onMessage)
   }, [game])
+
+  // waits for "ready" so the game always gets load first
+  useEffect(() => {
+    if (ready) {
+      const list = tasks.map((t) => ({ id: t.id, text: t.text, done: t.done, due: t.due, position: t.position }))
+      send({ type: "tasks", tasks: list })
+    }
+  }, [ready, tasks])
 
   if (!html) return <p className="small">Loading...</p>
   return <iframe ref={frame} title={game.title} sandbox="allow-scripts" srcDoc={html} />
