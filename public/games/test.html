@@ -13,6 +13,7 @@
   <button id="btn">Clicked 0 times</button>
   <h3>Your tasks</h3>
   <ul id="list"></ul>
+  <input id="new" placeholder="add a task from the app">
 <script>
 let clicks = 0
 const btn = document.getElementById("btn")
@@ -39,10 +40,18 @@ window.addEventListener("message", (e) => {
     for (const t of msg.tasks) {
       const li = document.createElement("li")
       li.textContent = (t.done ? "[x] " : "[ ] ") + t.text
+      // clicking a task flips it, to test update
+      li.onclick = () => parent.postMessage({ type: "update", id: t.id, done: !t.done }, "*")
       list.append(li)
     }
   }
 })
+
+document.getElementById("new").onkeydown = (e) => {
+  if (e.key !== "Enter" || !e.target.value.trim()) return
+  parent.postMessage({ type: "add", text: e.target.value }, "*")
+  e.target.value = ""
+}
 
 parent.postMessage({ type: "hello" }, "*")
 </script>
