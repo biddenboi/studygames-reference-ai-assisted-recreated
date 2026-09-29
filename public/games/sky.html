@@ -1,0 +1,246 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Night Sky</title>
+<meta name="author" content="Peter">
+<meta name="description" content="Each task is a star that lights up when you finish it. Click two stars to draw a line.">
+<style>
+  body { margin: 0; background: #070b1a; color: #cfd6ff; font-family: monospace; }
+  #bar { padding: 8px 12px; display: flex; gap: 12px; align-items: center; font-size: 13px; }
+  #count { margin-left: auto; color: #ffe39a; white-space: nowrap; }
+  #status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  @media (max-width: 600px) { #status { display: none; } }
+  canvas { display: block; }
+  #new { font: inherit; background: #0d1430; color: #cfd6ff; border: 1px solid #3a4470; border-radius: 6px; padding: 2px 8px; width: 160px; }
+  button { font: inherit; background: none; color: inherit; border: 1px solid #cfd6ff; border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <input id="new" placeholder="new task">
+  <span id="status">click a grey star twice to finish that task</span>
+  <span id="count"></span>
+  <button id="clear">clear sky</button>
+</div>
+<canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById("c")
+const ctx = canvas.getContext("2d")
+function fit() {
+  canvas.width = window.innerWidth
+  canvas.height = window.innerHeight - document.getElementById("bar").offsetHeight
+}
+fit()
+window.addEventListener("resize", fit)
+
+let sky = { stars: [], lines: [] }
+let picked = null     // first star clicked when drawing a line
+let hover = null
+let hoverGrey = null
+let open = []        // tasks not done yet, drawn as grey stars
+let finishing = null // grey star clicked once, waiting for the second click
+
+// same task always lands in the same spot, so a grey star lights up where it is
+function spot(id) {
+  return { x: 0.04 + hash(id + "x") * 0.84, y: 0.06 + hash(id + "y") * 0.84 }
+}
+
+// string -> number from 0 to 1. murmur-style mixing so ids like t1, t2 don't end up next to each other
+function hash(text) {
+  let h = 2166136261
+  for (const ch of text) h = Math.imul(h ^ ch.charCodeAt(0), 16777619)
+  h = Math.imul(h ^ (h >>> 15), 2246822507)
+  h = Math.imul(h ^ (h >>> 13), 3266489909)
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
+}
+
+// background stars (not saved)
+const dust = Array.from({ length: 120 }, () => ({ x: Math.random(), y: Math.random(), phase: Math.random() * 6.28 }))
+
+function addStar(label, at) {
+  sky.stars.push({
+    x: at ? at.x : Math.random(),   // stored as 0-1 so it works at any canvas size
+    y: at ? at.y : Math.random(),
+    r: label ? 3.5 : 1 + Math.random(),
+    label: label || null,
+    phase: Math.random() * 6.28,
+  })
+  save()
+}
+
+function save() {
+  parent.postMessage({ type: "save", save: sky }, "*")
+  document.getElementById("count").textContent = sky.stars.length + " stars"
+}
+
+function starAt(mx, my) {
+  return sky.stars.findIndex((s) => Math.hypot(s.x * canvas.width - mx, s.y * canvas.height - my) < 8)
+}
+
+// tasks that are done now but weren't last time
+function newlyDone(tasks) {
+  const seen = sky.seen || []
+  const fresh = tasks.filter((t) => t.done && !seen.includes(t.id))
+  sky.seen = tasks.filter((t) => t.done).map((t) => t.id)
+  return fresh
+}
+
+// full text shows on hover, so the sky doesn't fill up with long labels
+function short(text) {
+  return text.length > 18 ? text.slice(0, 17) + "…" : text
+}
+
+// flips to the left side of the star if it would run off the edge
+function fullLabel(text, x, y) {
+  ctx.font = "12px monospace"
+  const width = ctx.measureText(text).width
+  let left = x * canvas.width + 8
+  if (left + width > canvas.width - 4) left = Math.max(4, x * canvas.width - 8 - width)
+  ctx.fillStyle = "#070b1a"
+  ctx.fillRect(left - 3, y * canvas.height - 21, width + 6, 17)
+  ctx.fillStyle = "#cfd6ff"
+  ctx.fillText(text, left, y * canvas.height - 8)
+}
+
+function greyAt(mx, my) {
+  return open.find((t) => {
+    const p = spot(t.id)
+    return Math.hypot(p.x * canvas.width - mx, p.y * canvas.height - my) < 9
+  })
+}
+
+canvas.addEventListener("click", (e) => {
+  const grey = greyAt(e.offsetX, e.offsetY)
+  if (grey) {
+    // two clicks so you don't finish a task by accident while drawing lines
+    if (finishing === grey.id) {
+      parent.postMessage({ type: "update", id: grey.id, done: true }, "*")
+      finishing = null
+    } else {
+      finishing = grey.id
+      document.getElementById("status").textContent = "done with \"" + grey.text + "\"? click it again"
+    }
+    return
+  }
+  const i = starAt(e.offsetX, e.offsetY)
+  if (i === -1) return
+  if (picked === null || picked === i) {
+    picked = i
+  } else {
+    sky.lines.push([picked, i])
+    picked = null
+    save()
+  }
+})
+
+canvas.addEventListener("mousemove", (e) => {
+  const i = starAt(e.offsetX, e.offsetY)
+  hover = i === -1 ? null : i
+  hoverGrey = greyAt(e.offsetX, e.offsetY) || null
+  canvas.style.cursor = i !== -1 || hoverGrey ? "pointer" : "default"
+})
+
+document.getElementById("new").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || !e.target.value.trim()) return
+  parent.postMessage({ type: "add", text: e.target.value }, "*")
+  e.target.value = ""
+})
+
+// confirm() is blocked in the sandbox, so the button asks twice instead
+document.getElementById("clear").onclick = (e) => {
+  if (e.target.textContent !== "sure?") {
+    e.target.textContent = "sure?"
+    return setTimeout(() => { e.target.textContent = "clear sky" }, 3000)
+  }
+  e.target.textContent = "clear sky"
+  sky = { stars: [], lines: [], seen: sky.seen } // keep seen, or every old task would come back as a star
+  save()
+}
+
+function draw(time) {
+  ctx.fillStyle = "#070b1a"
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+  const glow = ctx.createLinearGradient(0, canvas.height * 0.6, 0, canvas.height)
+  glow.addColorStop(0, "rgba(60,50,120,0)")
+  glow.addColorStop(1, "rgba(90,60,140,0.35)")
+  ctx.fillStyle = glow
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+  for (const d of dust) {
+    ctx.fillStyle = `rgba(255,255,255,${0.15 + 0.1 * Math.sin(time / 900 + d.phase)})`
+    ctx.fillRect(d.x * canvas.width, d.y * canvas.height, 1, 1)
+  }
+
+  ctx.strokeStyle = "rgba(160,180,255,0.5)"
+  for (const [a, b] of sky.lines) {
+    const s1 = sky.stars[a], s2 = sky.stars[b]
+    ctx.beginPath()
+    ctx.moveTo(s1.x * canvas.width, s1.y * canvas.height)
+    ctx.lineTo(s2.x * canvas.width, s2.y * canvas.height)
+    ctx.stroke()
+  }
+
+  sky.stars.forEach((s, i) => {
+    // twinkle: brightness goes up and down on a sine wave
+    const bright = s.label ? 0.85 + 0.15 * Math.sin(time / 700 + s.phase) : 0.6 + 0.4 * Math.sin(time / 700 + s.phase)
+    ctx.fillStyle = i === picked ? "#ffd166" : s.label ? `rgba(255,230,150,${bright})` : `rgba(255,255,255,${bright})`
+    ctx.shadowColor = "#ffe39a"
+    ctx.shadowBlur = s.label ? 14 : 0
+    ctx.beginPath()
+    ctx.arc(s.x * canvas.width, s.y * canvas.height, s.r, 0, 6.28)
+    ctx.fill()
+    ctx.shadowBlur = 0
+    if (s.label && i !== hover) {
+      ctx.fillStyle = "rgba(207,214,255,0.45)"
+      ctx.font = "11px sans-serif"
+      ctx.fillText(short(s.label), s.x * canvas.width + 8, s.y * canvas.height + 4)
+    }
+  })
+
+  for (const t of open) {
+    const p = spot(t.id)
+    ctx.strokeStyle = t.id === finishing ? "#ffd166" : "rgba(207,214,255,0.4)"
+    ctx.beginPath()
+    ctx.arc(p.x * canvas.width, p.y * canvas.height, 3.5, 0, 6.28)
+    ctx.stroke()
+    if (t === hoverGrey) continue
+    ctx.fillStyle = "rgba(207,214,255,0.35)"
+    ctx.font = "11px sans-serif"
+    ctx.fillText(short(t.text), p.x * canvas.width + 8, p.y * canvas.height + 4)
+  }
+
+  if (hover !== null && sky.stars[hover] && sky.stars[hover].label) {
+    const s = sky.stars[hover]
+    fullLabel(s.label, s.x, s.y)
+  }
+  if (hoverGrey) {
+    const p = spot(hoverGrey.id)
+    fullLabel(hoverGrey.text, p.x, p.y)
+  }
+
+  requestAnimationFrame(draw)
+}
+requestAnimationFrame(draw)
+
+window.addEventListener("message", (e) => {
+  const msg = e.data
+  if (msg.type === "load" && msg.save) {
+    sky = msg.save
+    document.getElementById("count").textContent = sky.stars.length + " stars"
+  }
+  if (msg.type === "tasks") {
+    open = msg.tasks.filter((t) => !t.done)
+    const fresh = newlyDone(msg.tasks)
+    fresh.forEach((t) => addStar(t.text, spot(t.id)))
+    if (fresh.length) document.getElementById("status").textContent = "new star: " + fresh[0].text
+    save()
+  }
+})
+
+parent.postMessage({ type: "hello" }, "*")
+</script>
+</body>
+</html>

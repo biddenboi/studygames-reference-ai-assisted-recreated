@@ -1,0 +1,206 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pomodoro</title>
+<meta name="author" content="Peter">
+<meta name="description" content="25 min focus / 5 min break timer.">
+<style>
+  body { margin: 0; padding: 20px; font-family: system-ui, sans-serif; text-align: center; color: #222;
+         min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; }
+  select, button { font: inherit; padding: 5px 10px; border: 1px solid #ccc; border-radius: 6px; background: white; }
+  select { max-width: 260px; }
+  button { cursor: pointer; }
+  button:hover { background: #eee; }
+  #start { background: #ff6b35; border-color: #ff6b35; color: white; min-width: 90px; }
+  .break #start { background: #2e9e5b; border-color: #2e9e5b; }
+  #new { font: inherit; padding: 5px 10px; border: 1px solid #ccc; border-radius: 6px; display: none; margin: 8px auto 0; width: 240px; }
+  #ring { width: 300px; height: 300px; margin: 28px auto; border-radius: 50%; display: grid; place-items: center;
+          background: conic-gradient(#ff6b35 calc(var(--done, 0) * 1%), #eee 0); }
+  .break #ring { background: conic-gradient(#2e9e5b calc(var(--done, 0) * 1%), #eee 0); }
+  #face { width: 262px; height: 262px; border-radius: 50%; background: white; display: grid; place-content: center; }
+  #phase { font-size: 15px; color: #888; }
+  #clock { font-size: 64px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  #ask { margin: 16px auto 0; display: none; max-width: 340px; border: 1px solid #ddd; border-radius: 8px; padding: 0 12px 12px; }
+  .small { font-size: 12px; color: #777; }
+  ul { list-style: none; padding: 0; width: 100%; max-width: 340px; margin: 20px auto 0; text-align: left; }
+  li { display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 4px 0; }
+</style>
+</head>
+<body>
+  <div>
+    Working on: <select id="task"></select>
+    <select id="length">
+      <option value="25,5">25 / 5</option>
+      <option value="50,10">50 / 10</option>
+      <option value="15,3">15 / 3</option>
+    </select>
+    <input id="new" placeholder="what are you working on?">
+  </div>
+  <div id="ring"><div id="face"><div id="phase">Focus</div><div id="clock">25:00</div></div></div>
+  <div>
+    <button id="start">Start</button>
+    <button id="skip">Skip</button>
+    <button id="reset">Reset</button>
+  </div>
+
+  <div id="ask">
+    <p>Session done. Did you finish "<span id="askText"></span>"?</p>
+    <button id="yes">Yes</button>
+    <button id="no">Not yet</button>
+  </div>
+
+  <ul id="counts"></ul>
+
+<script>
+let save = { sessions: {}, length: "25,5" }
+let tasks = []
+let phase = "focus"
+let running = false
+let left = 25 * 60
+let endsAt = 0
+let waitingFor = null // text of a task we just added, so it gets picked when it shows up
+
+function lengths() {
+  const [focus, rest] = save.length.split(",").map(Number)
+  return { focus: focus * 60, rest: rest * 60 }
+}
+
+function format(s) {
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0")
+}
+
+function draw() {
+  document.getElementById("clock").textContent = format(left)
+  document.getElementById("phase").textContent = phase === "focus" ? "Focus" : "Break"
+  document.body.className = phase
+  const total = phase === "focus" ? lengths().focus : lengths().rest
+  document.getElementById("ring").style.setProperty("--done", 100 - (left / total) * 100)
+  document.getElementById("start").textContent = running ? "Pause" : "Start"
+
+  const list = document.getElementById("counts")
+  list.innerHTML = ""
+  for (const t of tasks.filter((t) => save.sessions[t.id])) {
+    const li = document.createElement("li")
+    li.innerHTML = "<span></span><span></span>"
+    li.children[0].textContent = (t.done ? "✓ " : "") + t.text
+    li.children[1].textContent = save.sessions[t.id] + " 🍅"
+    list.appendChild(li)
+  }
+}
+
+function fillTasks() {
+  const select = document.getElementById("task")
+  const picked = select.value
+  select.innerHTML = ""
+  const open = tasks.filter((t) => !t.done)
+  for (const t of open) {
+    const option = document.createElement("option")
+    option.value = t.id
+    option.textContent = t.text
+    select.appendChild(option)
+  }
+  const add = document.createElement("option")
+  add.value = "new"
+  add.textContent = "+ new task"
+  select.appendChild(add)
+
+  const added = open.find((t) => t.text === waitingFor)
+  if (added) {
+    select.value = added.id
+    waitingFor = null
+  } else if (open.some((t) => t.id === picked)) select.value = picked
+  document.getElementById("new").style.display = select.value === "new" ? "block" : "none"
+}
+
+document.getElementById("task").onchange = (e) => {
+  const input = document.getElementById("new")
+  input.style.display = e.target.value === "new" ? "block" : "none"
+  if (e.target.value === "new") input.focus()
+}
+
+document.getElementById("new").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || !e.target.value.trim()) return
+  waitingFor = e.target.value.trim()
+  parent.postMessage({ type: "add", text: e.target.value }, "*")
+  e.target.value = ""
+})
+
+function switchTo(p) {
+  phase = p
+  left = p === "focus" ? lengths().focus : lengths().rest
+  endsAt = Date.now() + left * 1000
+}
+
+// the id of the task in the dropdown, or "" if it's on "+ new task"
+function taskId() {
+  const id = document.getElementById("task").value
+  return id === "new" ? "" : id
+}
+
+function finishFocus() {
+  const id = taskId()
+  if (id) {
+    save.sessions[id] = (save.sessions[id] || 0) + 1
+    parent.postMessage({ type: "save", save }, "*")
+    const task = tasks.find((t) => t.id === id)
+    document.getElementById("askText").textContent = task ? task.text : ""
+    document.getElementById("ask").style.display = "block"
+  }
+  switchTo("break")
+}
+
+// uses an end time instead of counting down by 1, because browsers slow down timers in background tabs
+setInterval(() => {
+  if (!running) return
+  left = Math.max(0, Math.round((endsAt - Date.now()) / 1000))
+  if (left === 0) {
+    if (phase === "focus") finishFocus()
+    else switchTo("focus")
+  }
+  draw()
+}, 250)
+
+document.getElementById("start").onclick = () => {
+  running = !running
+  if (running) endsAt = Date.now() + left * 1000
+  draw()
+}
+document.getElementById("skip").onclick = () => { switchTo(phase === "focus" ? "break" : "focus"); draw() }
+document.getElementById("reset").onclick = () => { running = false; switchTo(phase); draw() }
+
+document.getElementById("length").onchange = (e) => {
+  save.length = e.target.value
+  parent.postMessage({ type: "save", save }, "*")
+  running = false
+  switchTo("focus")
+  draw()
+}
+
+document.getElementById("yes").onclick = () => {
+  const id = taskId()
+  if (id) parent.postMessage({ type: "update", id, done: true }, "*")
+  document.getElementById("ask").style.display = "none"
+}
+document.getElementById("no").onclick = () => { document.getElementById("ask").style.display = "none" }
+
+window.addEventListener("message", (e) => {
+  const msg = e.data
+  if (msg.type === "load" && msg.save) {
+    save = msg.save
+    document.getElementById("length").value = save.length
+    switchTo("focus")
+  }
+  if (msg.type === "tasks") {
+    tasks = msg.tasks
+    fillTasks()
+  }
+  draw()
+})
+
+switchTo("focus")
+draw()
+parent.postMessage({ type: "hello" }, "*")
+</script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pixel Garden</title>
+<meta name="author" content="Peter">
+<meta name="description" content="Plant seeds and check off tasks to grow them.">
+<style>
+  /* plots shrink on small screens so the planter still fits */
+  :root { --plot: min(64px, calc((100vw - 90px) / 6)); }
+  body { margin: 0; padding: 20px; font-family: system-ui, sans-serif; color: #2d2a32; text-align: center;
+         background: linear-gradient(#cfe8f7 0, #eaf5e1 160px, #eaf5e1); min-height: 100vh; box-sizing: border-box; }
+  h2 { margin: 0; font-size: 22px; }
+  #info { margin: 4px 0 0; color: #5d6b52; font-size: 14px; }
+  #bed { display: inline-block; margin: 16px 0; padding: 12px; background: #7a5233; border: 3px solid #2d2a32;
+         border-radius: 14px; box-shadow: 0 6px 0 #4e321e; }
+  #grid { display: grid; grid-template-columns: repeat(6, var(--plot)); gap: 6px; }
+  .plot { width: var(--plot); height: var(--plot); border-radius: 10px; font-size: calc(var(--plot) * 0.56); display: flex; align-items: center;
+          justify-content: center; cursor: pointer; background: #9b6b43;
+          background-image: radial-gradient(#7d5131 1.5px, transparent 1.5px); background-size: 9px 9px; }
+  .plot.empty:hover { outline: 3px dashed #fff3; outline-offset: -6px; }
+  .plot.bloom { background-color: #a9794e; animation: sway 2.5s ease-in-out infinite; }
+  @keyframes sway { 50% { transform: rotate(4deg); } }
+  button { font: inherit; font-size: 15px; font-weight: 700; padding: 8px 16px; border: 2px solid #2d2a32;
+           border-radius: 10px; background: #f2b53c; cursor: pointer; box-shadow: 0 3px 0 #2d2a32; }
+  button:active { transform: translateY(3px); box-shadow: none; }
+  #msg { color: #5d6b52; }
+  #main { display: flex; gap: 20px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  #todo { text-align: left; width: 250px; max-height: 444px; display: flex; flex-direction: column; box-sizing: border-box; margin-top: 16px; background: #fffdf5; border: 2px solid #2d2a32; border-radius: 10px; padding: 10px 12px; }
+  #todo h3 { margin: 0 0 6px; font-size: 15px; }
+  #list { overflow-y: auto; }
+  #todo h3 span { color: #9a9079; font-weight: normal; }
+  #todo label { display: flex; gap: 6px; align-items: flex-start; padding: 4px 0; font-size: 14px; cursor: pointer; }
+  #todo input[type=checkbox] { accent-color: #5a8f3c; margin: 2px 0 0; flex-shrink: 0; }
+  #new { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; margin-top: 6px; padding: 4px 6px; border: 1px solid #b9ad8f; border-radius: 6px; }
+  #none { color: #9a9079; font-size: 13px; margin: 2px 0; }
+</style>
+</head>
+<body>
+  <h2>🌷 Pixel Garden</h2>
+  <div id="info"></div>
+  <div id="main">
+    <div id="bed"><div id="grid"></div></div>
+    <div id="todo">
+      <h3>To do <span id="count"></span></h3>
+      <div id="list"></div>
+      <input id="new" placeholder="+ add a task">
+    </div>
+  </div>
+  <br>
+  <button id="harvest">Harvest flowers</button>
+  <p id="msg">Click an empty plot to plant a seed.</p>
+
+<script>
+  // 0 = empty, 1 = seed, 2 = sprout, 3 = bud, 4 = flower
+  const LOOKS = ["", "•", "🌱", "🌿"]
+  const FLOWERS = ["🌷", "🌻", "🌼", "🌹", "🪻", "🌸"]
+
+  let save = { plots: Array(36).fill(0), harvested: 0 }
+  let tasks = []
+
+  function draw() {
+    const grid = document.getElementById("grid")
+    grid.innerHTML = ""
+    save.plots.forEach((stage, i) => {
+      const div = document.createElement("div")
+      div.className = "plot" + (stage === 0 ? " empty" : "") + (stage === 4 ? " bloom" : "")
+      div.textContent = stage === 4 ? FLOWERS[i % FLOWERS.length] : LOOKS[stage]
+      div.title = ["click to plant", "seed", "sprout", "almost there", "ready to harvest"][stage]
+      div.onclick = () => plant(i)
+      grid.appendChild(div)
+    })
+    const growing = save.plots.filter((s) => s > 0 && s < 4).length
+    document.getElementById("info").textContent =
+      growing + " growing · " + save.plots.filter((s) => s === 4).length + " in bloom · " + save.harvested + " harvested"
+  }
+
+  function drawList() {
+    const list = document.getElementById("list")
+    list.innerHTML = ""
+    const open = tasks.filter((t) => !t.done)
+    document.getElementById("count").textContent = open.length || ""
+    if (!open.length) list.innerHTML = "<p id='none'>no tasks</p>"
+    for (const t of open) {
+      const label = document.createElement("label")
+      const box = document.createElement("input")
+      box.type = "checkbox"
+      box.onchange = () => parent.postMessage({ type: "update", id: t.id, done: true }, "*")
+      label.append(box, t.text)
+      list.appendChild(label)
+    }
+  }
+
+  // no <form> because the sandbox blocks submitting
+  document.getElementById("new").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || !e.target.value.trim()) return
+    parent.postMessage({ type: "add", text: e.target.value }, "*")
+    e.target.value = ""
+  })
+
+  function plant(i) {
+    if (save.plots[i] !== 0) return
+    save.plots[i] = 1
+    saveGame()
+    draw()
+  }
+
+  function grow() {
+    save.plots = save.plots.map((s) => (s === 0 ? 0 : Math.min(4, s + 1)))
+  }
+
+  function saveGame() {
+    parent.postMessage({ type: "save", save }, "*")
+  }
+
+  // tasks that are done now but weren't last time
+  function newlyDone(tasks) {
+    const seen = save.seen || []
+    const fresh = tasks.filter((t) => t.done && !seen.includes(t.id))
+    save.seen = tasks.filter((t) => t.done).map((t) => t.id)
+    return fresh
+  }
+
+  document.getElementById("harvest").onclick = () => {
+    const flowers = save.plots.filter((s) => s === 4).length
+    save.harvested += flowers
+    save.plots = save.plots.map((s) => (s === 4 ? 0 : s))
+    document.getElementById("msg").textContent = flowers ? "Harvested " + flowers + "!" : "Nothing's ready yet."
+    saveGame()
+    draw()
+  }
+
+  window.addEventListener("message", (e) => {
+    const msg = e.data
+
+    if (msg.type === "load" && msg.save) save = msg.save
+
+    if (msg.type === "tasks") {
+      tasks = msg.tasks
+      drawList()
+      const fresh = newlyDone(msg.tasks)
+      fresh.forEach(grow)
+      const planted = save.plots.some((stage) => stage > 0)
+      if (fresh.length && planted) document.getElementById("msg").textContent = "Everything grew a stage."
+      saveGame()
+    }
+
+    draw()
+  })
+
+  draw()
+  drawList()
+  parent.postMessage({ type: "hello" }, "*")
+</script>
+</body>
+</html>

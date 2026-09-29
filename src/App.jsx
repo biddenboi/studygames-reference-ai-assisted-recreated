@@ -3,10 +3,14 @@ import { loadTasks, addTask, updateTask } from "./tasks.js"
 import Tasks from "./Tasks.jsx"
 import GameFrame from "./GameFrame.jsx"
 
-const TEST = { id: "test", title: "Test", url: "games/test.html" }
+const GAMES = [
+  { id: "garden", title: "Pixel Garden", url: "games/garden.html" },
+  { id: "sky", title: "Night Sky", url: "games/sky.html" },
+  { id: "pomodoro", title: "Pomodoro", url: "games/pomodoro.html" },
+]
 
 export default function App() {
-  const [view, setView] = useState("app")
+  const [view, setView] = useState(GAMES[0].id)
   const [tasks, setTasks] = useState(loadTasks)
 
   // the list and the app can both change tasks, so every change starts from the newest list.
@@ -31,20 +35,22 @@ export default function App() {
           StudyGames
         </a>
         <nav>
-          <a href="#" className={view === "app" ? "on" : ""} onClick={() => setView("app")}>
-            Test
-          </a>
+          {GAMES.map((g) => (
+            <a key={g.id} href="#" className={view === g.id ? "on" : ""} onClick={() => setView(g.id)}>
+              {g.title}
+            </a>
+          ))}
           <a href="#" className={view === "tasks" ? "on" : ""} onClick={() => setView("tasks")}>
             Tasks
           </a>
         </nav>
       </header>
 
-      {view === "app" && (
-        <div className="player">
-          <GameFrame game={TEST} tasks={tasks} actions={toolActions} />
+      {GAMES.filter((g) => g.id === view).map((g) => (
+        <div className="player" key={g.id}>
+          <GameFrame game={g} tasks={tasks} actions={toolActions} />
         </div>
-      )}
+      ))}
 
       {view === "tasks" && (
         <main className="settings-page">
