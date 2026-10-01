@@ -28,11 +28,8 @@ export default function GameFrame({ game, tasks, actions }) {
   }
 
   useEffect(() => {
-    fetch(game.url)
-      .then((res) => res.text())
-      .then((text) => setHtml(LOCKDOWN + text))
-      .catch(() => setHtml("<p>Couldn't load this app.</p>"))
-  }, [game.url])
+    setHtml(LOCKDOWN + game.html)
+  }, [game])
 
   useEffect(() => {
     function onMessage(e) {

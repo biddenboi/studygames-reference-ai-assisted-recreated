@@ -2,12 +2,8 @@ import { useRef, useState } from "react"
 import { loadTasks, addTask, updateTask } from "./tasks.js"
 import Tasks from "./Tasks.jsx"
 import GameFrame from "./GameFrame.jsx"
+import { BUILT_IN as GAMES } from "./games.js"
 
-const GAMES = [
-  { id: "garden", title: "Pixel Garden", url: "games/garden.html" },
-  { id: "sky", title: "Night Sky", url: "games/sky.html" },
-  { id: "pomodoro", title: "Pomodoro", url: "games/pomodoro.html" },
-]
 
 export default function App() {
   const [view, setView] = useState(GAMES[0].id)
