@@ -1,19 +1,24 @@
 import { useState } from "react"
-import { addTask, updateTask, deleteTask, moveUp } from "./tasks.js"
+import { addTasks, updateTask, deleteTask, moveUp } from "./tasks.js"
 
 // "2026-10-27" -> "Oct 27"
 function shortDate(due) {
   return new Date(due + "T00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
-export default function Tasks({ tasks, changeTasks }) {
+export default function Tasks({ user, tasks, changeTasks }) {
   const [text, setText] = useState("")
   const [due, setDue] = useState("")
+  const [status, setStatus] = useState("")
+
+  function run(change) {
+    changeTasks(change).catch((err) => setStatus(err.message))
+  }
 
   function add(e) {
     e.preventDefault()
     if (!text.trim()) return
-    changeTasks((list) => addTask(list, text.trim(), due))
+    run((list) => addTasks(user, list, [{ text: text.trim(), due }]))
     setText("")
     setDue("")
   }
@@ -25,11 +30,15 @@ export default function Tasks({ tasks, changeTasks }) {
       <ul>
         {tasks.map((t) => (
           <li key={t.id} className={t.done ? "done" : ""}>
-            <input type="checkbox" checked={t.done} onChange={() => changeTasks((list) => updateTask(list, t.id, { done: !t.done }))} />
+            <input
+              type="checkbox"
+              checked={t.done}
+              onChange={() => run((list) => updateTask(user, list, t.id, { done: !t.done }))}
+            />
             <span className="text">{t.text}</span>
             {t.due && <span className="due">{shortDate(t.due)}</span>}
-            <button title="move up" onClick={() => changeTasks((list) => moveUp(list, t.id))}>↑</button>
-            <button title="delete" onClick={() => changeTasks((list) => deleteTask(list, t.id))}>×</button>
+            <button title="move up" onClick={() => run((list) => moveUp(user, list, t.id))}>↑</button>
+            <button title="delete" onClick={() => run((list) => deleteTask(user, list, t.id))}>×</button>
           </li>
         ))}
       </ul>
@@ -39,6 +48,9 @@ export default function Tasks({ tasks, changeTasks }) {
         <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
         <button>Add</button>
       </form>
+
+      {!user && <p className="small">Not logged in, so tasks are only saved in this browser.</p>}
+      {status && <p className="small">{status}</p>}
     </section>
   )
 }
