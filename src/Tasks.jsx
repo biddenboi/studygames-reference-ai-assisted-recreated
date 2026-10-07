@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { addTasks, updateTask, deleteTask, moveUp } from "./tasks.js"
+import { getTodoistTasks } from "./todoist.js"
 
 // "2026-10-27" -> "Oct 27"
 function shortDate(due) {
@@ -9,6 +10,7 @@ function shortDate(due) {
 export default function Tasks({ user, tasks, changeTasks }) {
   const [text, setText] = useState("")
   const [due, setDue] = useState("")
+  const [token, setToken] = useState("")
   const [status, setStatus] = useState("")
 
   function run(change) {
@@ -23,9 +25,22 @@ export default function Tasks({ user, tasks, changeTasks }) {
     setDue("")
   }
 
+  async function importTodoist() {
+    setStatus("Importing...")
+    try {
+      const imported = await getTodoistTasks(token.trim())
+      await changeTasks((list) => addTasks(user, list, imported))
+      setStatus("Imported " + imported.length + " tasks")
+      setToken("")
+    } catch (err) {
+      setStatus("Import failed: " + err.message)
+    }
+  }
+
   return (
     <section className="tasks box">
       <h2>Tasks</h2>
+      <p className="small">Every app on the site reads from this list.</p>
       {tasks.length === 0 && <p className="small">No tasks yet.</p>}
       <ul>
         {tasks.map((t) => (
@@ -48,6 +63,18 @@ export default function Tasks({ user, tasks, changeTasks }) {
         <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
         <button>Add</button>
       </form>
+
+      <details>
+        <summary>Import from Todoist</summary>
+        <p className="small">
+          Paste your API token (Todoist &gt; Settings &gt; Integrations &gt; Developer). It's only used for this
+          import and isn't saved.
+        </p>
+        <div className="row">
+          <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="token" type="password" />
+          <button onClick={importTodoist} disabled={!token}>Import</button>
+        </div>
+      </details>
 
       {!user && <p className="small">Not logged in, so tasks are only saved in this browser.</p>}
       {status && <p className="small">{status}</p>}

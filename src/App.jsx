@@ -68,10 +68,10 @@ export default function App() {
               {g.title}
             </a>
           ))}
-          <a href="#" className={view === "tasks" ? "on" : ""} onClick={() => setView("tasks")}>
-            Tasks
-          </a>
         </nav>
+        <a href="#" className={view === "settings" ? "on right" : "right"} onClick={() => setView("settings")}>
+          {user ? user.email : "Settings"}
+        </a>
       </header>
 
       {GAMES.filter((g) => g.id === view).map((g) => (
@@ -80,31 +80,34 @@ export default function App() {
         </div>
       ))}
 
-      {view === "tasks" && (
+      {view === "settings" && (
         <main className="settings-page">
-          {supabase && (
-            <section className="box">
-              {user ? (
-                <p>
-                  Logged in as {user.email} <button onClick={() => supabase.auth.signOut()}>Log out</button>
-                </p>
-              ) : (
-                <form onSubmit={login} className="row">
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email" required />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="password"
-                    required
-                  />
-                  <button name="login">Log in</button>
-                  <button name="signup">Sign up</button>
-                  {loginMessage && <span className="small">{loginMessage}</span>}
-                </form>
-              )}
-            </section>
-          )}
+          <h1>Settings</h1>
+          <section className="box">
+            <h2>Account</h2>
+            {!supabase && <p className="small">No Supabase set up, so everything is saved in this browser.</p>}
+            {supabase && user && (
+              <p>
+                Logged in as {user.email} <button onClick={() => supabase.auth.signOut()}>Log out</button>
+              </p>
+            )}
+            {supabase && !user && (
+              <form onSubmit={login} className="row">
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email" required />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="password"
+                  required
+                />
+                <button name="login">Log in</button>
+                <button name="signup">Sign up</button>
+                {loginMessage && <span className="small">{loginMessage}</span>}
+              </form>
+            )}
+          </section>
+
           <Tasks user={user} tasks={tasks} changeTasks={changeTasks} />
         </main>
       )}

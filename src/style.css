@@ -135,7 +135,7 @@ main {
   background: white;
 }
 
-/* tasks */
+/* settings */
 
 .settings-page {
   max-width: 760px;
@@ -197,4 +197,13 @@ main {
   background: #ff6b35;
   border-color: #ff6b35;
   color: white;
+}
+
+.tasks details {
+  margin-top: 12px;
+}
+
+.tasks summary {
+  cursor: pointer;
+  color: #777;
 }
