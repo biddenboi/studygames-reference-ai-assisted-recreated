@@ -207,3 +207,8 @@ main {
   cursor: pointer;
   color: #777;
 }
+
+.upload form {
+  display: grid;
+  gap: 8px;
+}

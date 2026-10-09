@@ -27,8 +27,13 @@ export default function GameFrame({ game, tasks, actions }) {
     frame.current.contentWindow.postMessage(msg, "*")
   }
 
+  // built-in games already have their html, uploaded ones get downloaded
   useEffect(() => {
-    setHtml(LOCKDOWN + game.html)
+    if (game.html) return setHtml(LOCKDOWN + game.html)
+    fetch(game.url)
+      .then((res) => res.text())
+      .then((text) => setHtml(LOCKDOWN + text))
+      .catch(() => setHtml("<p>Couldn't load this app.</p>"))
   }, [game])
 
   useEffect(() => {
