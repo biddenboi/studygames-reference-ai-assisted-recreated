@@ -1,0 +1,242 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Life While You Study</title>
+<meta name="author" content="Peter">
+<meta name="description" content="Conway's Game of Life. The simulation is in Rust, compiled to WebAssembly. It runs 40 generations for each task you check off.">
+<style>
+  body { margin: 0; padding: 16px; font-family: ui-monospace, Menlo, monospace; background: #10141f; color: #c9f2d0; }
+  b { color: #7cf29a; font-size: 16px; }
+  #status { color: #8fa3b8; margin-left: 8px; }
+  canvas { border: 2px solid #2b3550; border-radius: 8px; cursor: crosshair; display: block; margin: 10px 0; background: #0a0e17; }
+  button { font: inherit; background: #1b2336; color: #c9f2d0; border: 1px solid #3a4a6b; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  button.on { background: #7cf29a; color: #10141f; border-color: #7cf29a; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  #gen { color: #8fa3b8; }
+  #wrap { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  #todo { width: 240px; margin-top: 10px; display: flex; flex-direction: column; }
+  #list { overflow-y: auto; margin-top: 4px; }
+  #list div { display: flex; gap: 6px; align-items: baseline; padding: 3px 0; border-bottom: 1px solid #1f2840; }
+  #list span { flex: 1; overflow-wrap: anywhere; }
+  #todo button { padding: 1px 6px; font-size: 12px; }
+  #new { font: inherit; width: 100%; box-sizing: border-box; margin-top: 8px; background: #0a0e17; color: #c9f2d0;
+         border: 1px solid #3a4a6b; border-radius: 6px; padding: 4px 6px; }
+</style>
+</head>
+<body>
+<div><b>Life While You Study</b> <span id="status">paused. check off a task to run it</span></div>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="todo">
+    <b>todo <span id="open"></span></b>
+    <div id="list"></div>
+    <input id="new" placeholder="add a task">
+  </div>
+</div>
+<div id="stamps">
+  <button data-stamp="">draw</button>
+</div>
+<p id="gen"></p>
+
+<script>
+// built from life/src/lib.rs by life/build.sh, don't edit by hand
+const WASM = "AGFzbQEAAAABEwRgAAF/YAAAYAN/f38AYAJ/fwADCAcAAQACAQMABAUBcAEBAQUDAQARBgkBfwFBgIDAAAsHRQgGbWVtb3J5AgAJY2VsbHNfcHRyAAAFY2xlYXIAAQZoZWlnaHQAAgNzZXQAAwR0aWNrAAQGdG9nZ2xlAAUFd2lkdGgABgrZAwcIAEGAmMCAAAsQAEGAmMCAAEEAQYAY/AsACwQAQTALJAACQCAAQT9LDQAgAUEwTw0AIAFBBnQgAGogAjoAgJjAgAALC9sCAQ1/I4CAgIAAQTBrIgBBHGpBCGohASAAQQhqQQhqIQJBACEDA0AgA0EGdCEEQQAhBQNAIABBATYCGCAAQi83AhBBACEGQQAhBwNAIAIgBkECdGooAgAhCCAAQj83AiQgAEEBNgIsIAZBAWohBiAIIANqQTBwQQZ0QYCYwIAAaiEJQQAhCgNAIApBAWohCyABIApBAnRqIQoCQAJAA0AgCigCACIMIAhyDQEgCkEEaiEKIAtBAWoiC0EERg0CDAALCyAJIAwgBWpBP3FqLQAAIAdqIQcgCyEKIAtBA0cNAQsLIAZBA0cNAAtBACEKAkACQAJAIAUgBGoiCy0AgJjAgAAOAgEAAgsgB0H+AXFBAkYhCgwBCyAHQf8BcUEDRiEKCyALIAo6AICAwIAAIAVBAWoiBUHAAEcNAAsgA0EBaiIDQTBHDQALQYCYwIAAQYCAwIAAQYAY/AoAAAswAAJAIABBP0sNACABQTBPDQAgAUEGdCAAaiIAIAAtAICYwIAAQQFzOgCAmMCAAAsLBQBBwAALAFwEbmFtZQAKCWxpZmUud2FzbQE1BwAJY2VsbHNfcHRyAQVjbGVhcgIGaGVpZ2h0AwNzZXQEBHRpY2sFBnRvZ2dsZQYFd2lkdGgHEgEAD19fc3RhY2tfcG9pbnRlcgBNCXByb2R1Y2VycwIIbGFuZ3VhZ2UBBFJ1c3QADHByb2Nlc3NlZC1ieQEFcnVzdGMdMS45Ny4wICgyZDgxNDRiNzggMjAyNi0wNy0wNykAlAEPdGFyZ2V0X2ZlYXR1cmVzCCsLYnVsay1tZW1vcnkrD2J1bGstbWVtb3J5LW9wdCsWY2FsbC1pbmRpcmVjdC1vdmVybG9uZysKbXVsdGl2YWx1ZSsPbXV0YWJsZS1nbG9iYWxzKxNub250cmFwcGluZy1mcHRvaW50Kw9yZWZlcmVuY2UtdHlwZXMrCHNpZ24tZXh0"
+
+let CELL = 10 // pixels per cell, made bigger in start() if there's room
+
+// pattern stamps, unlocked by finishing tasks
+const STAMPS = {
+  glider: [
+    ".#.",
+    "..#",
+    "###",
+  ],
+  pulsar: [
+    "..###...###..",
+    ".............",
+    "#....#.#....#",
+    "#....#.#....#",
+    "#....#.#....#",
+    "..###...###..",
+    ".............",
+    "..###...###..",
+    "#....#.#....#",
+    "#....#.#....#",
+    "#....#.#....#",
+    ".............",
+    "..###...###..",
+  ],
+  "glider gun": [
+    "........................#...........",
+    "......................#.#...........",
+    "............##......##............##",
+    "...........#...#....##............##",
+    "##........#.....#...##..............",
+    "##........#...#.##....#.#...........",
+    "..........#.....#.......#...........",
+    "...........#...#....................",
+    "............##......................",
+  ],
+}
+
+let life, W, H
+let save = { cells: "", generation: 0, finished: 0, energy: 0 }
+let stamp = ""
+
+// stamps unlock after this many finished tasks
+const UNLOCK_AT = { glider: 1, pulsar: 3, "glider gun": 6 }
+// every finished task gives the grid this many generations to run
+const GENERATIONS_PER_TASK = 40
+
+function cells() {
+  return new Uint8Array(life.memory.buffer, life.cells_ptr(), W * H)
+}
+
+function draw() {
+  const ctx = document.getElementById("c").getContext("2d")
+  const c = cells()
+  ctx.fillStyle = "#0a0e17"
+  ctx.fillRect(0, 0, W * CELL, H * CELL)
+  ctx.fillStyle = save.energy > 0 ? "#7cf29a" : "#3c4a5e"
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (c[y * W + x]) ctx.fillRect(x * CELL, y * CELL, CELL - 1, CELL - 1)
+    }
+  }
+  document.getElementById("gen").textContent =
+    "generation " + save.generation + " | " + save.energy + " generations left | " + save.finished + " tasks finished"
+}
+
+function saveGame() {
+  save.cells = Array.from(cells()).join("")
+  parent.postMessage({ type: "save", save }, "*")
+}
+
+function showStamps() {
+  const div = document.getElementById("stamps")
+  div.innerHTML = ""
+  const names = ["", ...Object.keys(STAMPS).filter((n) => save.finished >= UNLOCK_AT[n])]
+  for (const name of names) {
+    const b = document.createElement("button")
+    b.textContent = name || "draw"
+    b.className = name === stamp ? "on" : ""
+    b.onclick = () => { stamp = name; showStamps() }
+    div.appendChild(b)
+  }
+  const next = Object.keys(STAMPS).find((n) => save.finished < UNLOCK_AT[n])
+  if (next) div.append(" (" + next + " unlocks at " + UNLOCK_AT[next] + " finished task" + (UNLOCK_AT[next] === 1 ? "" : "s") + ")")
+}
+
+function placeStamp(name, cx, cy) {
+  STAMPS[name].forEach((row, dy) => {
+    for (let dx = 0; dx < row.length; dx++) {
+      if (row[dx] === "#") life.set(cx + dx, cy + dy, 1)
+    }
+  })
+}
+
+function showTodo(tasks) {
+  const list = document.getElementById("list")
+  list.innerHTML = ""
+  const open = tasks.filter((t) => !t.done)
+  document.getElementById("open").textContent = open.length ? "(" + open.length + ")" : ""
+  if (!open.length) list.innerHTML = "<span style='color:#5c6b80'>empty</span>"
+  for (const t of open) {
+    const row = document.createElement("div")
+    const text = document.createElement("span")
+    text.textContent = t.text
+    const done = document.createElement("button")
+    done.textContent = "done"
+    done.onclick = () => parent.postMessage({ type: "update", id: t.id, done: true }, "*")
+    row.append(text, done)
+    list.appendChild(row)
+  }
+}
+
+document.getElementById("new").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || !e.target.value.trim()) return
+  parent.postMessage({ type: "add", text: e.target.value }, "*")
+  e.target.value = ""
+})
+
+// tasks that are done now but weren't last time
+function newlyDone(tasks) {
+  const seen = save.seen || []
+  const fresh = tasks.filter((t) => t.done && !seen.includes(t.id))
+  save.seen = tasks.filter((t) => t.done).map((t) => t.id)
+  return fresh
+}
+
+// runs about 8 generations a second, but only while there's energy from finished tasks
+setInterval(() => {
+  if (!life || save.energy <= 0) return
+  life.tick()
+  save.generation++
+  save.energy--
+  if (save.energy === 0) document.getElementById("status").textContent = "paused. check off a task to run it"
+  if (save.energy === 0 || save.generation % 50 === 0) saveGame()
+  draw()
+}, 125)
+
+async function start() {
+  const bytes = Uint8Array.from(atob(WASM), (ch) => ch.charCodeAt(0))
+  const { instance } = await WebAssembly.instantiate(bytes)
+  life = instance.exports
+  W = life.width()
+  H = life.height()
+
+  const canvas = document.getElementById("c")
+  // grow the cells to fill the space, leaving room for the todo list and the buttons
+  const side = window.innerWidth > 700 ? 300 : 40 // on phones the list goes under the grid
+  CELL = Math.max(4, Math.floor(Math.min((window.innerWidth - side) / W, (window.innerHeight - 120) / H)))
+  canvas.width = W * CELL
+  canvas.height = H * CELL
+  canvas.onclick = (e) => {
+    const x = Math.floor(e.offsetX / CELL)
+    const y = Math.floor(e.offsetY / CELL)
+    if (stamp) placeStamp(stamp, x, y)
+    else life.toggle(x, y)
+    saveGame()
+    draw()
+  }
+
+  // start with some random cells so there's something to watch
+  for (let i = 0; i < W * H * 0.2; i++) {
+    life.set(Math.floor(Math.random() * W), Math.floor(Math.random() * H), 1)
+  }
+
+  document.getElementById("todo").style.maxHeight = canvas.height + "px"
+  showStamps()
+  draw()
+  parent.postMessage({ type: "hello" }, "*")
+}
+
+window.addEventListener("message", (e) => {
+  const msg = e.data
+  if (msg.type === "load" && msg.save) {
+    save = { ...save, ...msg.save }
+    life.clear()
+    for (let i = 0; i < save.cells.length; i++) {
+      if (save.cells[i] === "1") life.set(i % W, Math.floor(i / W), 1)
+    }
+    showStamps()
+  }
+  if (msg.type === "tasks") {
+    showTodo(msg.tasks)
+    const fresh = newlyDone(msg.tasks)
+    if (fresh.length) {
+      save.finished += fresh.length
+      save.energy += fresh.length * GENERATIONS_PER_TASK
+      document.getElementById("status").textContent = "running"
+      showStamps()
+      saveGame()
+    }
+  }
+  draw()
+})
+
+start()
+</script>
+</body>
+</html>
