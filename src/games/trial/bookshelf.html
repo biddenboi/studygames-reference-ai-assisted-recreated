@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Bookshelf</title>
+<meta name="author" content="Peter">
+<meta name="description" content="Finished tasks go on a bookshelf.">
+<style>
+  body { margin: 0; padding: 18px; background: #f3e9dc; font-family: Georgia, serif; color: #3b2a1a; }
+  h3 { margin: 0; font-size: 22px; }
+  #count { font-size: 14px; margin: 2px 0 14px; color: #7a5a3f; }
+  #case { background: #5e3b22; border: 3px solid #2d1d10; border-radius: 10px; padding: 12px 12px 2px; box-shadow: 0 6px 0 #2d1d10; }
+  .shelf { display: flex; align-items: flex-end; gap: 3px; min-height: 180px; padding: 0 8px;
+           background: #3f2716; border-bottom: 14px solid #a0693f; margin-bottom: 12px; border-radius: 4px 4px 0 0;
+           box-shadow: inset 0 8px 12px rgba(0,0,0,0.4); }
+  .book { writing-mode: vertical-rl; transform: rotate(180deg); color: #fff; font-size: 13px;
+          padding: 8px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          border-radius: 3px 3px 0 0; cursor: default;
+          box-shadow: inset -4px 0 rgba(0,0,0,0.25), inset 0 -6px rgba(255,255,255,0.15), inset 0 6px rgba(255,255,255,0.15); }
+  .book:hover { transform: rotate(180deg) translateY(8px); }
+  .book.new { animation: drop 0.5s ease-out; }
+  @keyframes drop { from { transform: rotate(180deg) translateY(60px); opacity: 0; } }
+  #empty { font-style: italic; color: #d9c2a5; margin: 0 0 10px; }
+  #main { display: flex; gap: 20px; align-items: flex-start; }
+  #side { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; max-height: calc(100vh - 90px); }
+  #case { flex: 1; min-width: 0; }
+  #pile { overflow-y: auto; margin-top: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+  .flat { color: #fff; font-size: 13px; padding: 4px 10px; border-radius: 2px 4px 4px 2px; cursor: pointer; max-width: calc(100% - 26px); box-sizing: border-box; flex-shrink: 0;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: inset 0 -3px rgba(0,0,0,0.25); }
+  .flat:hover { transform: translateX(6px); }
+  #new { margin-top: 8px; font: inherit; font-size: 14px; padding: 4px 8px; border: 1px solid #a88b6c; border-radius: 4px; background: #fffaf2; }
+  @media (max-width: 600px) {
+    #main { flex-direction: column; align-items: stretch; }
+    #side { width: auto; max-height: 40vh; }
+  }
+  .hint { font-size: 13px; color: #7a5a3f; margin: 4px 0 0; }
+</style>
+</head>
+<body>
+<h3>Bookshelf</h3>
+<div id="count"></div>
+<div id="main">
+  <div id="side">
+    <b>To read <span id="open"></span></b>
+    <p class="hint">click a book when you're done with it</p>
+    <input id="new" placeholder="add a task">
+    <div id="pile"></div>
+  </div>
+  <div id="case"><div id="shelves"></div><p id="empty">No books yet.</p></div>
+</div>
+
+<script>
+const COLORS = ["#8c2f39", "#2e5266", "#6b8f71", "#c08552", "#4a4e69", "#9a8c98", "#b5651d", "#1d3557"]
+
+let shelf = [] // { id, text, color, height, day }
+let justAdded = []
+let open = []
+
+function hashNum(id) {
+  let h = 0
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return h
+}
+
+// a task keeps the same color from the pile to the shelf
+function colorFor(id) {
+  return COLORS[hashNum(id) % COLORS.length]
+}
+
+function bookWidth(book) {
+  return 18 + Math.min(book.text.length, 30) / 2
+}
+
+function drawPile() {
+  const pile = document.getElementById("pile")
+  pile.innerHTML = ""
+  document.getElementById("open").textContent = open.length ? "(" + open.length + ")" : ""
+  for (const t of open) {
+    const div = document.createElement("div")
+    div.className = "flat"
+    div.style.background = colorFor(t.id)
+    div.style.width = 90 + Math.min(t.text.length, 30) * 5 + "px"
+    div.style.marginLeft = hashNum(t.id) % 24 + "px" // books in a pile don't line up perfectly
+    div.textContent = t.text
+    div.title = t.text
+    div.onclick = () => parent.postMessage({ type: "update", id: t.id, done: true }, "*")
+    pile.appendChild(div)
+  }
+}
+
+document.getElementById("new").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || !e.target.value.trim()) return
+  parent.postMessage({ type: "add", text: e.target.value }, "*")
+  e.target.value = ""
+})
+
+function draw() {
+  const shelves = document.getElementById("shelves")
+  shelves.innerHTML = ""
+  // fill each shelf until the next book wouldn't fit, then start a new one
+  const room = shelves.clientWidth - 16
+  const rows = [[]]
+  let used = 0
+  for (const book of shelf) {
+    const width = bookWidth(book) + 8 + 3 // + padding + gap
+    if (used + width > room && rows[rows.length - 1].length) {
+      rows.push([])
+      used = 0
+    }
+    rows[rows.length - 1].push(book)
+    used += width
+  }
+
+  for (const books of rows) {
+    if (!books.length) continue
+    const row = document.createElement("div")
+    row.className = "shelf"
+    for (const book of books) {
+      const div = document.createElement("div")
+      div.className = "book" + (justAdded.includes(book.id) ? " new" : "")
+      div.style.background = book.color
+      div.style.height = book.height + "px"
+      div.style.width = bookWidth(book) + "px"
+      div.textContent = book.text
+      div.title = book.text + " (" + book.day + ")"
+      row.appendChild(div)
+    }
+    shelves.appendChild(row)
+  }
+  while (shelves.children.length < 2) {
+    const row = document.createElement("div")
+    row.className = "shelf"
+    shelves.appendChild(row)
+  }
+  document.getElementById("count").textContent = shelf.length + (shelf.length === 1 ? " book" : " books")
+  document.getElementById("empty").style.display = shelf.length ? "none" : "block"
+}
+
+window.addEventListener("message", (e) => {
+  const msg = e.data
+  if (msg.type === "load" && msg.save) shelf = msg.save
+
+  if (msg.type === "tasks") {
+    open = msg.tasks.filter((t) => !t.done)
+    drawPile()
+    const before = shelf.length
+    justAdded = []
+    for (const t of msg.tasks) {
+      const onShelf = shelf.some((b) => b.id === t.id)
+      if (t.done && !onShelf) {
+        shelf.push({
+          id: t.id,
+          text: t.text,
+          color: colorFor(t.id),
+          height: 120 + Math.floor(Math.random() * 50),
+          day: new Date().toLocaleDateString("en-CA"),
+        })
+        justAdded.push(t.id)
+      }
+      // unticked by mistake, so take the book back off
+      if (!t.done && onShelf) shelf = shelf.filter((b) => b.id !== t.id)
+    }
+    if (shelf.length !== before || justAdded.length) parent.postMessage({ type: "save", save: shelf }, "*")
+  }
+  draw()
+})
+
+draw()
+window.addEventListener("resize", draw)
+parent.postMessage({ type: "hello" }, "*")
+</script>
+</body>
+</html>

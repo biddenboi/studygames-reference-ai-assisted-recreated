@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Spin the Wheel</title>
+<meta name="author" content="Peter">
+<meta name="description" content="Picks a random task for you.">
+<style>
+  body { margin: 0; padding: 12px; font-family: sans-serif; text-align: center; background: #fffaf0; }
+  #wrap { position: relative; width: fit-content; margin: 0 auto; }
+  #pointer { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); font-size: 28px; }
+  canvas { display: block; margin-top: 14px; }
+  button { font: inherit; font-size: 17px; font-weight: 700; padding: 8px 24px; margin: 6px; cursor: pointer;
+           border: 2px solid #2d2a32; border-radius: 10px; background: #e76f51; color: #fff; box-shadow: 0 3px 0 #2d2a32; }
+  button:active { transform: translateY(3px); box-shadow: none; }
+  #done { background: #2a9d8f; }
+  canvas { filter: drop-shadow(0 5px 0 #2d2a32); }
+  #new { font: inherit; font-size: 15px; padding: 6px 10px; border: 2px solid #2d2a32; border-radius: 10px; width: 220px; }
+  #pick { font-size: 20px; min-height: 28px; margin: 10px auto 0; max-width: 600px; font-weight: bold; }
+  #note { color: #8a7f70; font-size: 13px; margin: 4px 0; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="pointer">▼</div>
+  <canvas id="wheel"></canvas>
+</div>
+<div id="pick"></div>
+<button id="spin">Spin</button>
+<button id="done" style="display:none">Done</button>
+<p id="note"></p>
+<input id="new" placeholder="add something to the wheel">
+
+<script>
+const COLORS = ["#f4a261", "#e76f51", "#2a9d8f", "#e9c46a", "#8ab17d", "#b56576", "#6d6875", "#457b9d"]
+const canvas = document.getElementById("wheel")
+const ctx = canvas.getContext("2d")
+const MAX_SLICES = 12 // more than this and you can't read them
+
+// as big as fits above the buttons
+const SIZE = Math.max(260, Math.min(window.innerWidth - 40, window.innerHeight - 190, 560))
+const C = SIZE / 2
+canvas.width = canvas.height = SIZE
+
+let open = []        // open tasks on the wheel
+let total = 0        // all open tasks, even ones that didn't fit
+let angle = 0        // current rotation in radians
+let picked = null
+let save = { spins: 0 }
+
+function draw() {
+  const r = C - 5
+  ctx.clearRect(0, 0, SIZE, SIZE)
+  if (!open.length) {
+    ctx.fillStyle = "#ddd"
+    ctx.beginPath(); ctx.arc(C, C, r, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = "#555"; ctx.font = "16px sans-serif"; ctx.textAlign = "center"
+    ctx.fillText("No tasks", C, C + 5)
+    return
+  }
+  const slice = (Math.PI * 2) / open.length
+  open.forEach((t, i) => {
+    const start = angle + i * slice
+    ctx.fillStyle = COLORS[i % COLORS.length]
+    ctx.beginPath(); ctx.moveTo(C, C); ctx.arc(C, C, r, start, start + slice); ctx.fill()
+    ctx.save()
+    ctx.translate(C, C)
+    ctx.rotate(start + slice / 2)
+    ctx.fillStyle = "#fff"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "right"
+    const fit = Math.floor(r / 8.5) // about how many letters fit along a slice
+    ctx.fillText(t.text.length > fit ? t.text.slice(0, fit - 1) + "…" : t.text, r - 10, 5)
+    ctx.restore()
+  })
+}
+
+// which slice is under the pointer at the top (pointer is at -90 degrees)
+function sliceAtPointer() {
+  const slice = (Math.PI * 2) / open.length
+  const a = (((-Math.PI / 2 - angle) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
+  return open[Math.floor(a / slice)]
+}
+
+document.getElementById("spin").onclick = () => {
+  if (!open.length) return
+  const start = angle
+  const turn = Math.PI * 2 * (4 + Math.random() * 3) // 4 to 7 full turns
+  const startTime = performance.now()
+  const time = 3000
+  document.getElementById("pick").textContent = ""
+  document.getElementById("done").style.display = "none"
+
+  function frame(now) {
+    const t = Math.min(1, (now - startTime) / time)
+    angle = start + turn * (1 - Math.pow(1 - t, 3)) // ease out so it slows down at the end
+    draw()
+    if (t < 1) return requestAnimationFrame(frame)
+    picked = sliceAtPointer()
+    document.getElementById("pick").textContent = "Do this: " + picked.text
+    document.getElementById("done").style.display = "inline-block"
+    save.spins++
+    parent.postMessage({ type: "save", save }, "*")
+  }
+  requestAnimationFrame(frame)
+}
+
+document.getElementById("done").onclick = () => {
+  if (picked) parent.postMessage({ type: "update", id: picked.id, done: true }, "*")
+}
+
+document.getElementById("new").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || !e.target.value.trim()) return
+  parent.postMessage({ type: "add", text: e.target.value }, "*")
+  e.target.value = ""
+})
+
+window.addEventListener("message", (e) => {
+  const msg = e.data
+  if (msg.type === "load" && msg.save) save = msg.save
+  if (msg.type === "tasks") {
+    // the soonest ones go on the wheel. no due date counts as last
+    const all = msg.tasks.filter((t) => !t.done).sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"))
+    total = all.length
+    open = all.slice(0, MAX_SLICES)
+    if (picked && !open.some((t) => t.id === picked.id)) {
+      document.getElementById("pick").textContent = "Done. Spin again?"
+      document.getElementById("done").style.display = "none"
+      picked = null
+    }
+    document.getElementById("note").textContent =
+      total > MAX_SLICES ? "Showing the " + MAX_SLICES + " soonest of your " + total + " tasks." : ""
+    draw()
+  }
+})
+
+draw()
+parent.postMessage({ type: "hello" }, "*")
+</script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Plan My Day</title>
+<meta name="author" content="Peter">
+<meta name="description" content="Sort tasks into today, tomorrow and someday, or split a big one into steps.">
+<style>
+  body { margin: 0; padding: 16px; font-family: system-ui, sans-serif; font-size: 14px; color: #222; }
+  input, button { font: inherit; border: 1px solid #ccc; border-radius: 6px; padding: 5px 10px; background: white; }
+  button { cursor: pointer; }
+  button:hover { background: #eee; }
+  #add { background: #ff6b35; border-color: #ff6b35; color: white; }
+  #dump { display: flex; gap: 8px; margin-bottom: 14px; }
+  #dump input { flex: 1; }
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .col { background: #f2f3f5; border-radius: 8px; padding: 10px; min-height: calc(100vh - 90px); }
+  .col h3 { margin: 0 0 10px; font-size: 14px; }
+  .col h3 span { color: #999; font-weight: normal; }
+  .task { background: white; border: 1px solid #ddd; border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+  .task .buttons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .task button { font-size: 11px; padding: 1px 6px; color: #555; }
+  .steps { margin-top: 6px; display: flex; gap: 4px; }
+  .steps input { flex: 1; min-width: 0; font-size: 12px; padding: 3px 6px; }
+  @media (max-width: 600px) {
+    .cols { grid-template-columns: 1fr; }
+    .col { min-height: 0; }
+  }
+  .none { color: #aaa; font-size: 13px; }
+</style>
+</head>
+<body>
+  <div id="dump">
+    <input id="text" placeholder="add a task" autocomplete="off">
+    <button id="add">Add</button>
+  </div>
+  <div class="cols">
+    <div class="col"><h3>Today <span id="n-today"></span></h3><div id="today"></div></div>
+    <div class="col"><h3>Tomorrow <span id="n-tomorrow"></span></h3><div id="tomorrow"></div></div>
+    <div class="col"><h3>Someday <span id="n-someday"></span></h3><div id="someday"></div></div>
+  </div>
+
+<script>
+let tasks = []
+let splitting = null // id of the task we're breaking into steps
+
+function day(offset) {
+  const d = new Date()
+  d.setDate(d.getDate() + offset)
+  return d.toLocaleDateString("en-CA") // YYYY-MM-DD
+}
+
+// late tasks count as today, there's no point having a separate "overdue" pile
+function column(t) {
+  if (!t.due) return "someday"
+  if (t.due <= day(0)) return "today"
+  if (t.due === day(1)) return "tomorrow"
+  return "someday"
+}
+
+function send(msg) { parent.postMessage(msg, "*") }
+
+// the sandbox blocks real <form> submits, so Enter is handled by hand
+function onEnter(input, fn) {
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") fn() })
+}
+
+function button(label, onclick) {
+  const b = document.createElement("button")
+  b.textContent = label
+  b.onclick = onclick
+  return b
+}
+
+function draw() {
+  for (const id of ["today", "tomorrow", "someday"]) document.getElementById(id).innerHTML = ""
+
+  for (const t of tasks.filter((t) => !t.done)) {
+    const col = column(t)
+    const div = document.createElement("div")
+    div.className = "task"
+    div.textContent = t.text
+    if (col === "someday" && t.due) div.textContent += " (" + t.due + ")"
+
+    const buttons = document.createElement("div")
+    buttons.className = "buttons"
+    if (col !== "today") buttons.append(button("today", () => send({ type: "update", id: t.id, due: day(0) })))
+    if (col !== "tomorrow") buttons.append(button("tomorrow", () => send({ type: "update", id: t.id, due: day(1) })))
+    if (col !== "someday") buttons.append(button("someday", () => send({ type: "update", id: t.id, due: null })))
+    buttons.append(button("steps", () => { splitting = splitting === t.id ? null : t.id; draw() }))
+    buttons.append(button("done", () => send({ type: "update", id: t.id, done: true })))
+    div.append(buttons)
+
+    if (splitting === t.id) {
+      const row = document.createElement("div")
+      row.className = "steps"
+      const input = document.createElement("input")
+      input.placeholder = "first step, second step, ..."
+      const addSteps = () => {
+        const steps = input.value.split(",").map((s) => s.trim()).filter(Boolean)
+        for (const step of steps) send({ type: "add", text: step, due: t.due })
+        splitting = null
+        draw()
+      }
+      onEnter(input, addSteps)
+      row.append(input, button("add steps", addSteps))
+      div.append(row)
+      setTimeout(() => input.focus())
+    }
+
+    document.getElementById(col).append(div)
+  }
+
+  for (const id of ["today", "tomorrow", "someday"]) {
+    const box = document.getElementById(id)
+    document.getElementById("n-" + id).textContent = box.children.length || ""
+    if (!box.children.length) box.innerHTML = "<p class='none'>" + "nothing here" + "</p>"
+  }
+}
+
+function dump() {
+  const input = document.getElementById("text")
+  if (input.value.trim()) send({ type: "add", text: input.value, due: day(0) })
+  input.value = ""
+}
+document.getElementById("add").onclick = dump
+onEnter(document.getElementById("text"), dump)
+
+window.addEventListener("message", (e) => {
+  if (e.data.type === "tasks") {
+    tasks = e.data.tasks
+    draw()
+  }
+})
+
+draw()
+send({ type: "hello" })
+</script>
+</body>
+</html>
