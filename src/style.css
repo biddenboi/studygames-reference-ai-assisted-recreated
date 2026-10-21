@@ -119,12 +119,101 @@ main {
   padding: 28px;
 }
 
+.title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+/* app cards */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.card:hover {
+  border-color: #bbb;
+}
+
+.thumb {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  background: #e4e4e0;
+  border-bottom: 1px solid #ddd;
+  color: #777;
+  font-weight: 600;
+  overflow: hidden;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 10px 14px 14px;
+}
+
+.card-body a {
+  color: #222;
+  font-size: 15px;
+}
+
+.card-body p {
+  margin: 6px 0 0;
+  color: #555;
+  font-size: 13px;
+  flex: 1;
+}
+
+.card-body button {
+  margin-top: 12px;
+  align-self: flex-start;
+}
+
+.card-body button.add {
+  background: #ff6b35;
+  border-color: #ff6b35;
+  color: white;
+}
+
 /* an open app takes the whole space under the top bar */
 
 .player {
   display: flex;
   flex-direction: column;
   height: calc(100vh - 56px);
+}
+
+.player-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 8px 28px;
+  background: white;
+  border-bottom: 1px solid #ddd;
+}
+
+.player-bar button {
+  margin-left: auto;
+  padding: 2px 10px;
 }
 
 .player iframe {
@@ -206,6 +295,11 @@ main {
 .tasks summary {
   cursor: pointer;
   color: #777;
+}
+
+.upload {
+  margin-top: 28px;
+  max-width: 520px;
 }
 
 .upload form {

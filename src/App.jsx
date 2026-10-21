@@ -7,16 +7,20 @@ import Upload from "./Upload.jsx"
 import { BUILT_IN } from "./games.js"
 
 export default function App() {
-  const [view, setView] = useState(BUILT_IN[0].id)
   const [user, setUser] = useState(null)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loginMessage, setLoginMessage] = useState("")
   const [games, setGames] = useState(BUILT_IN)
+  // the apps you've added to your sidebar. new people start with the built-ins outside trial/
+  const [mine, setMine] = useState(() => {
+    const saved = localStorage.getItem("myApps")
+    return saved ? JSON.parse(saved) : BUILT_IN.filter((g) => !g.id.startsWith("trial/")).map((g) => g.id)
+  })
   const [tasks, setTasks] = useState([])
 
-  // the list and the app can both change tasks, and saving to Supabase takes a moment,
-  // so changes run one at a time. otherwise two quick changes could overwrite each other
+  // tasks are the one thing every tool shares, so every change (from the list or from a
+  // tool) goes through here one at a time. otherwise two quick changes could overwrite each other
   const latest = useRef([])
   const queue = useRef(Promise.resolve())
 
@@ -70,12 +74,31 @@ export default function App() {
     else if (signUp) setLoginMessage("Signed up! Check your email to confirm.")
   }
 
-  // what an app is allowed to do to your tasks: add and update, never delete
+  // what a tool is allowed to do to your tasks: add and update, never delete
   const toolActions = {
     add: (task) => changeTasks((list) => addTasks(user, list, [task])),
     update: (id, changes) =>
       changeTasks((list) => (list.some((t) => t.id === id) ? updateTask(user, list, id, changes) : list)),
   }
+
+  // the page is picked by the part of the url after #, so the back button works
+  // "" = my apps, "#browse", "#settings", "#app/garden"
+  const [hash, setHash] = useState(location.hash)
+  useEffect(() => {
+    const onChange = () => setHash(location.hash)
+    window.addEventListener("hashchange", onChange)
+    return () => window.removeEventListener("hashchange", onChange)
+  }, [])
+
+  function toggle(id) {
+    const next = mine.includes(id) ? mine.filter((m) => m !== id) : [...mine, id]
+    setMine(next)
+    localStorage.setItem("myApps", JSON.stringify(next))
+  }
+
+  const view = hash.startsWith("#app/") ? "app" : hash.slice(1) || "home"
+  const app = games.find((g) => "#app/" + g.id === hash)
+  const myApps = games.filter((g) => mine.includes(g.id))
 
   return (
     <>
@@ -84,22 +107,83 @@ export default function App() {
           StudyGames
         </a>
         <nav>
-          {games.map((g) => (
-            <a key={g.id} href="#" className={view === g.id ? "on" : ""} onClick={() => setView(g.id)}>
-              {g.title}
-            </a>
-          ))}
+          <a href="#" className={view === "home" ? "on" : ""}>
+            My apps
+          </a>
+          <a href="#browse" className={view === "browse" ? "on" : ""}>
+            Browse
+          </a>
         </nav>
-        <a href="#" className={view === "settings" ? "on right" : "right"} onClick={() => setView("settings")}>
+        <a href="#settings" className={view === "settings" ? "on right" : "right"}>
           {user ? user.email : "Settings"}
         </a>
       </header>
 
-      {games.filter((g) => g.id === view).map((g) => (
-        <div className="player" key={g.id}>
-          <GameFrame game={g} tasks={tasks} actions={toolActions} />
+      {view === "home" && (
+        <main>
+          <div className="title-row">
+            <h1>My apps</h1>
+            <a href="#browse">+ Add apps</a>
+          </div>
+          {!myApps.length && <p>You haven't added any apps yet.</p>}
+          <div className="grid">
+            {myApps.map((g) => (
+              <Card key={g.id} app={g} />
+            ))}
+          </div>
+        </main>
+      )}
+
+      {view === "app" && (
+        <div className="player">
+          <div className="player-bar">
+            <a href="#">← My apps</a>
+            {app && (
+              <span>
+                <b>{app.title}</b> <span className="small">by {app.author}</span>
+              </span>
+            )}
+            {app && !mine.includes(app.id) && <button onClick={() => toggle(app.id)}>Add to my apps</button>}
+          </div>
+          {app ? (
+            <GameFrame key={app.id} game={app} tasks={tasks} actions={toolActions} />
+          ) : (
+            <p className="small">Can't find that app.</p>
+          )}
         </div>
-      ))}
+      )}
+
+      {view === "browse" && (
+        <main>
+          <h1>Browse</h1>
+          <h2>Built in</h2>
+          <div className="grid">
+            {games
+              .filter((g) => !g.url)
+              .map((g) => (
+                <Card key={g.id} app={g} mine={mine} toggle={toggle} />
+              ))}
+          </div>
+
+          <h2>Uploaded</h2>
+          {!supabase && <p className="small">Uploads need Supabase set up (see the README).</p>}
+          {supabase && !games.some((g) => g.url) && <p className="small">Nothing uploaded yet.</p>}
+          <div className="grid">
+            {games
+              .filter((g) => g.url)
+              .map((g) => (
+                <Card key={g.id} app={g} mine={mine} toggle={toggle} />
+              ))}
+          </div>
+
+          {supabase && user && <Upload user={user} onUploaded={loadUploaded} />}
+          {supabase && !user && (
+            <p className="small">
+              <a href="#settings">Log in</a> to upload your own.
+            </p>
+          )}
+        </main>
+      )}
 
       {view === "settings" && (
         <main className="settings-page">
@@ -130,10 +214,34 @@ export default function App() {
           </section>
 
           <Tasks user={user} tasks={tasks} changeTasks={changeTasks} />
-
-          {supabase && user && <Upload user={user} onUploaded={loadUploaded} />}
         </main>
       )}
     </>
+  )
+}
+
+// one app in a grid. on Browse it also gets an Add/Remove button
+function Card({ app, mine, toggle }) {
+  return (
+    <div className="card">
+      <a href={"#app/" + app.id} className="thumb">
+        {app.thumb ? <img src={app.thumb} alt="" /> : <span>{app.title}</span>}
+      </a>
+      <div className="card-body">
+        <a href={"#app/" + app.id}>
+          <b>{app.title}</b>
+        </a>
+        <div className="small">
+          by {app.author}
+          {app.created_at && " · " + new Date(app.created_at).toLocaleDateString()}
+        </div>
+        <p>{app.description}</p>
+        {toggle && (
+          <button onClick={() => toggle(app.id)} className={mine.includes(app.id) ? "" : "add"}>
+            {mine.includes(app.id) ? "Remove" : "Add"}
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
