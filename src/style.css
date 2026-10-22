@@ -264,6 +264,8 @@ main {
 
 .tasks li .text {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .tasks li.done .text {
@@ -280,12 +282,18 @@ main {
 .due {
   font-size: 12px;
   color: #e8571f;
+  white-space: nowrap;
 }
 
 .tasks form button {
   background: #ff6b35;
   border-color: #ff6b35;
   color: white;
+}
+
+.tasks form input:first-child {
+  flex: 1 1 100%;
+  min-width: 0;
 }
 
 .tasks details {
@@ -305,4 +313,23 @@ main {
 .upload form {
   display: grid;
   gap: 8px;
+}
+
+@media (max-width: 600px) {
+  header {
+    gap: 16px;
+    padding: 0 16px;
+  }
+
+  header .name {
+    display: none;
+  }
+
+  main {
+    padding: 20px 16px;
+  }
+
+  .player-bar {
+    padding: 8px 16px;
+  }
 }
