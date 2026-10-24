@@ -131,6 +131,7 @@ export default function App() {
               <Card key={g.id} app={g} />
             ))}
           </div>
+          <p className="credit">Made by Peter for the 2026 Congressional App Challenge</p>
         </main>
       )}
 
@@ -182,6 +183,10 @@ export default function App() {
               <a href="#settings">Log in</a> to upload your own.
             </p>
           )}
+          <p className="small">
+            Want to make one? It's a single .html file, see the{" "}
+            <a href="https://github.com/biddenboi/StudyGames">README</a>.
+          </p>
         </main>
       )}
 

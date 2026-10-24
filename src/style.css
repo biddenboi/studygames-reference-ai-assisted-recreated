@@ -125,6 +125,12 @@ main {
   gap: 16px;
 }
 
+.credit {
+  margin-top: 40px;
+  font-size: 12px;
+  color: #999;
+}
+
 /* app cards */
 
 .grid {

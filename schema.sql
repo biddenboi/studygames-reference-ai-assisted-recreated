@@ -24,6 +24,7 @@ create policy "upload games" on games for insert to authenticated
 
 
 -- your tasks. other apps can read/write these through Supabase's REST API
+-- (see "Your tasks from other apps" in the README)
 create table tasks (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users on delete cascade,
